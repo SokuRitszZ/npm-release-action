@@ -73,12 +73,12 @@ export async function buildBundle(config, plan) {
     assert(path.basename(packed) === filenames.npm, 'Unexpected release artifact name');
     if (config.sourceArchive) {
       const sourceTar = path.join(temp, 'tracked.tar.gz');
-      checked('git', ['archive', '--format=tar.gz', '--prefix=source/', '-o', sourceTar, plan.commit], root);
+      checked('git', ['archive', '--format=tar.gz', '--prefix=source/', '-o', sourceTar, plan.commit], config.workspace);
       await extractArchive(sourceTar, temp, 'source');
       const sourceRoot = path.join(temp, 'source', config.directory);
       await writeJson(path.join(sourceRoot, 'package.json'), metadata.pkg);
       if (metadata.lock) await writeJson(path.join(sourceRoot, 'package-lock.json'), metadata.lock);
-      checked('tar', ['-czf', path.join(output, filenames.source), '-C', temp, 'source'], root);
+      checked('tar', ['--format=pax', '-czf', path.join(output, filenames.source), '-C', temp, 'source'], root);
     }
     const assets = [];
     for (const filename of [filenames.npm, filenames.source].filter(Boolean)) {

@@ -26,6 +26,7 @@ jobs:
   action-smoke:
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release/') && !github.event.deleted
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}

@@ -52,6 +52,13 @@ test('standalone subdirectory, no shrinkwrap and no source archive', async t => 
   assert.equal(bundle.manifest.assets.length, 1);
   assert.ok(!archiveEntries(await fs.readFile(bundle.npm)).some(e => e.name.endsWith('npm-shrinkwrap.json')));
 });
+test('subdirectory source archive preserves repository-relative paths', async t => {
+  const f = await fixture(t, { subdirectory: 'packages/cli', sourceArchive: true });
+  const bundle = await buildBundle(f.config, f.plan);
+  const entries = archiveEntries(await fs.readFile(path.join(f.config.artifactDirectory, bundle.manifest.source)), 'source');
+  assert.equal(archivedJson(entries, 'source/packages/cli/package.json').version, f.plan.version);
+  assert.ok(entries.some(e => e.name === 'source/.gitignore'));
+});
 test('artifact byte corruption and configuration changes fail verification', async t => {
   const f = await fixture(t); const bundle = await buildBundle(f.config, f.plan);
   await assert.rejects(verifyBundle({ ...f.config, stableTag: 'stable' }, f.plan), /configuration mismatch/);
