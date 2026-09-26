@@ -13,15 +13,16 @@ function merged() {
   return { ...push(), eventName: 'pull_request', event: { repository: { full_name: repository }, action: 'closed',
     pull_request: { merged: true, merge_commit_sha: commit, head: { ref: 'release/2.3.4', repo: { full_name: repository } }, base: { ref: 'main', repo: { full_name: repository } } } } };
 }
-test('push versions are unique per run/attempt and use beta channel', () => {
+test('push versions use one increasing run number and retries retain it', () => {
   const p = planRelease(push(), defaults);
-  assert.equal(p.version, '2.3.4-beta.42.1'); assert.equal(p.distTag, 'beta'); assert.equal(p.commit, commit);
-  assert.equal(planRelease(push({ runNumber: '43' }), defaults).version, '2.3.4-beta.43.1');
-  assert.equal(planRelease(push({ runAttempt: '2' }), defaults).version, '2.3.4-beta.42.2');
+  assert.equal(p.version, '2.3.4-beta.42'); assert.equal(p.distTag, 'beta'); assert.equal(p.commit, commit);
+  assert.equal(planRelease(push({ runNumber: '43' }), defaults).version, '2.3.4-beta.43');
+  assert.deepEqual(planRelease(push({ runAttempt: '2' }), defaults), p);
+  assert.deepEqual(planRelease(push({ runAttempt: undefined }), defaults), p);
 });
-test('failed-job retries preserve only valid earlier same-run versions', () => {
-  assert.equal(planRelease(push({ runAttempt: '2' }), { ...defaults, requestedVersion: '2.3.4-beta.42.1' }).version, '2.3.4-beta.42.1');
-  for (const requestedVersion of ['2.3.4-beta.41.1', '2.3.4-beta.42.3', '2.3.4-beta.42.01', '2.3.4', '2.3.5-beta.42.1']) assert.throws(() => planRelease(push(), { ...defaults, requestedVersion }));
+test('retry version overrides must exactly match the current run', () => {
+  assert.equal(planRelease(push({ runAttempt: '2' }), { ...defaults, requestedVersion: '2.3.4-beta.42' }).version, '2.3.4-beta.42');
+  for (const requestedVersion of ['2.3.4-beta.41', '2.3.4-beta.43', '2.3.4-beta.42.1', '2.3.4-beta.042', '2.3.4', '2.3.5-beta.42']) assert.throws(() => planRelease(push(), { ...defaults, requestedVersion }));
 });
 test('stable uses PR merge commit rather than head SHA', () => {
   const c = merged(); c.event.pull_request.head.sha = 'b'.repeat(40);
@@ -45,7 +46,7 @@ test('reject malformed branches and newline injection', () => {
 test('branch prefixes, main branch, IDs, channels and tag prefixes are configurable', () => {
   const config = readConfig({ INPUT_RELEASE_BRANCH_PREFIX: 'ignored', 'INPUT_RELEASE-BRANCH-PREFIX': 'ship/', 'INPUT_MAIN-BRANCH': 'trunk', 'INPUT_PRERELEASE-ID': 'rc', 'INPUT_PRERELEASE-TAG': 'next', 'INPUT_STABLE-TAG': 'stable', 'INPUT_TAG-PREFIX': 'pkg-v' });
   const c = push(); c.ref = c.event.ref = 'refs/heads/ship/2.3.4';
-  const p = planRelease(c, config); assert.equal(p.version, '2.3.4-rc.42.1'); assert.equal(p.tag, 'pkg-v2.3.4-rc.42.1'); assert.equal(p.distTag, 'next');
+  const p = planRelease(c, config); assert.equal(p.version, '2.3.4-rc.42'); assert.equal(p.tag, 'pkg-v2.3.4-rc.42'); assert.equal(p.distTag, 'next');
   const pr = merged(); pr.event.pull_request.head.ref = 'ship/2.3.4'; pr.event.pull_request.base.ref = 'trunk'; assert.equal(planRelease(pr, config).distTag, 'stable');
 });
 test('configuration rejects unsafe paths, credential URLs and malformed booleans', () => {

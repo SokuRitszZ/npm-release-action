@@ -6,6 +6,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { assert, semver, publicationConfig } from './config.js';
 import { checkout, checked, json, writeJson, within } from './io.js';
 import { archiveEntries, archivedJson, extractArchive } from './tar.js';
+import { versionManifests } from './version.js';
 
 const digest = (data, algorithm = 'sha256', encoding = 'hex') => createHash(algorithm).update(data).digest(encoding);
 const equal = (actual, expected, message) => assert(isDeepStrictEqual(actual, expected), message);
@@ -33,11 +34,10 @@ export async function manifests(root, config, plan) {
     lock = await json(lockFile);
     assert([2, 3].includes(lock.lockfileVersion) && lock.name === pkg.name && lock.version === pkg.version && lock.packages?.['']?.version === pkg.version, 'Lockfile root/version mismatch (v2 or v3 required)');
     for (const field of ['dependencies', 'devDependencies', 'optionalDependencies']) equal(lock.packages[''][field] || {}, pkg[field] || {}, `Lockfile ${field} mismatch`);
-    lock.version = plan.version; lock.packages[''].version = plan.version;
   }
   assert(!config.shrinkwrap || lock, 'shrinkwrap requires package-lock.json');
   assert(!await exists(path.join(root, 'npm-shrinkwrap.json')), 'Existing npm-shrinkwrap.json is unsupported; use package-lock.json and shrinkwrap:true');
-  return { sourceVersion: pkg.version, pkg: { ...pkg, version: plan.version }, lock };
+  return { sourceVersion: pkg.version, ...await versionManifests(pkg, lock, plan.version) };
 }
 function runtimePackage(pkg, config) {
   if (config.shrinkwrap && Array.isArray(pkg.files)) return { ...pkg, files: [...new Set([...pkg.files, 'npm-shrinkwrap.json'])] };

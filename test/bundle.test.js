@@ -100,7 +100,7 @@ test('real action entrypoint outputs a plan, builds and dry-runs without uploads
     assert.equal(result.status, 0, `${phase}: ${result.stderr}`);
     if (phase.startsWith('publish')) assert.match(result.stdout, /nothing uploaded/);
   }
-  assert.match(await fs.readFile(output, 'utf8'), /version=3.2.1-beta.42.1/);
+  assert.match(await fs.readFile(output, 'utf8'), /^version=3\.2\.1-beta\.42$/m);
   const refused = spawnSync(process.execPath, [entry], { cwd: f.workspace, env: { ...env, INPUT_PHASE: 'publish-npm', 'INPUT_DRY-RUN': 'false' }, encoding: 'utf8' });
   assert.notEqual(refused.status, 0); assert.match(refused.stderr, /requires GitHub Actions/);
 });

@@ -17,7 +17,7 @@ async function main() {
   assert(!process.env.GITHUB_API_URL || process.env.GITHUB_API_URL === 'https://api.github.com', 'This version supports GitHub.com only');
   const plan = planRelease({ eventName: process.env.GITHUB_EVENT_NAME, event: await json(process.env.GITHUB_EVENT_PATH),
     repository: process.env.GITHUB_REPOSITORY, ref: process.env.GITHUB_REF, commit: process.env.GITHUB_SHA,
-    runNumber: process.env.GITHUB_RUN_NUMBER, runAttempt: process.env.GITHUB_RUN_ATTEMPT }, config);
+    runNumber: process.env.GITHUB_RUN_NUMBER }, config);
   await checkout(config, plan);
   let bundle, status = config.phase;
   if (config.phase === 'build') bundle = await buildBundle(config, plan);

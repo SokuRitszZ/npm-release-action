@@ -5,11 +5,11 @@
 
 A dependency-free GitHub Action that turns release branches into npm betas and merged release PRs into stable packages. Build once, test the exact tarball, and publish those same bytes with npm Trusted Publishing.
 
-- Push `release/1.2.3` → `1.2.3-beta.<run_number>.<run_attempt>`, npm `beta`.
-- Push again → a new beta. Re-run all jobs → a new attempt version.
+- Push `release/1.2.3` → `1.2.3-beta.<run_number>`, npm `beta`.
+- Push again → a new beta (`beta.42`, `beta.43`, …). Retries retain the same version. The counter is workflow-wide, not reset for each release branch; failed runs can leave gaps.
 - Merge a **same-repository** `release/1.2.3` PR into `main` → `1.2.3`, npm `latest`, from the merge commit.
 - Direct pushes to `main`, fork PRs, unmerged PRs, manual-dispatch and tag events are rejected.
-- Versions are stamped **only into artifacts**, not committed back to your source branch.
+- Versions are stamped **only into artifacts**, not committed back to your source branch. Manifest updates use native `npm version` on isolated copies, with Git commits/tags, lifecycle hooks and network access disabled; same-version retries are allowed.
 - Publishing is **dry-run by default**. No npm package is installed to use this action.
 
 ## Quick start
@@ -53,7 +53,7 @@ All `with:` values are strings; quote booleans. Use the same package/versioning/
 | `artifact-directory` | `$RUNNER_TEMP/npm-release` | Bundle location; build requires an empty directory outside checkout |
 | `release-branch-prefix` | `release/` | Prefix followed by an exact `x.y.z`; must end in `/` |
 | `main-branch` | `main` | PR target branch required for stable publication |
-| `prerelease-id` | `beta` | Version identifier, e.g. `rc` produces `1.2.3-rc.42.1` |
+| `prerelease-id` | `beta` | Version identifier, e.g. `rc` produces `1.2.3-rc.42` |
 | `prerelease-tag` | `beta` | npm prerelease distribution tag, e.g. `next` |
 | `stable-tag` | `latest` | npm stable distribution tag |
 | `tag-prefix` | `v` | GitHub release tag prefix, e.g. `cli-v` |
@@ -91,7 +91,7 @@ The npm bundle preserves your package's normal npm contents and runtime scripts,
 
 ## Retry and ordering behavior
 
-- Failed-job retries can reuse a version/artifact from an earlier attempt of the **same run**. Always pass the original `plan.version`.
+- Both failed-job and full-run retries retain the same version for the **same run**. Prefer retrying failed jobs with the original artifact and `plan.version`; rebuilding a source archive can change its bytes and fail immutable-asset checks. Start a new run via a new push if a new beta version is needed.
 - Existing npm versions are skipped only if SHA-512 integrity matches. Only explicit registry `E404` means absent; auth/network failures stop publication.
 - Existing GitHub assets must have the same SHA-256 digest. They are never clobbered. Partial uploads remain drafts.
 - Retrying an already-published npm version does not move its dist-tag backwards.

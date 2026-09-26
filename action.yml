@@ -20,7 +20,7 @@ inputs:
     description: 'Target branch required for stable PR-merge releases'
     default: main
   prerelease-id:
-    description: 'SemVer prerelease identifier; versions are x.y.z-ID.RUN.ATTEMPT'
+    description: 'SemVer prerelease identifier; versions are x.y.z-ID.RUN'
     default: beta
   prerelease-tag:
     description: 'npm dist-tag for prereleases'

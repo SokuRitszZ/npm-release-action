@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Delegate manifest version updates to native `npm version` on isolated copies; disable lifecycle scripts and Git tagging, and allow same-version retries.
+- Simplify prerelease versions to `x.y.z-beta.<run_number>` (one increasing number). All retries keep the same version; differing existing bytes still fail closed.
+
 ## 1.0.0
 
 - Release-branch betas and same-repository PR-merge stable versions.
