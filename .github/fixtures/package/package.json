@@ -1,0 +1,8 @@
+{
+  "name": "release-action-smoke-fixture",
+  "version": "0.0.0",
+  "type": "module",
+  "license": "MIT",
+  "files": ["cli.js"],
+  "bin": { "fixture-version": "cli.js" }
+}

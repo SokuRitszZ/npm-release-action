@@ -1,0 +1,147 @@
+# Copy to .github/workflows/release.yml in YOUR npm package repository.
+# For production, replace @v1 with a reviewed full commit SHA.
+name: Release npm package
+on:
+  push:
+    branches: ['release/*']
+  pull_request:
+    types: [closed]
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  # A shared branch group can replace pending runs, even with cancellation off.
+  group: npm-release-${{ github.run_id }}
+  cancel-in-progress: false
+jobs:
+  plan:
+    if: >-
+      (github.event_name == 'push' && !github.event.deleted) ||
+      (github.event_name == 'pull_request' && github.event.pull_request.merged == true &&
+       github.event.pull_request.head.repo.full_name == github.repository &&
+       startsWith(github.event.pull_request.head.ref, 'release/'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.plan.outputs.version }}
+      commit: ${{ steps.plan.outputs.commit }}
+      artifact-name: ${{ steps.plan.outputs.artifact-name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.merge_commit_sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: SokuRitszZ/npm-release-action@v1
+        id: plan
+        with:
+          phase: plan
+
+  test:
+    needs: plan
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        node: ['22', '24']
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.commit }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      # Customize install/build/test steps for your package, in this read-only job.
+      - run: npm ci --ignore-scripts
+      - run: npm run build --if-present
+      - run: npm test
+
+  build:
+    needs: [plan, test]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.commit }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm install --global npm@11.12.1 --ignore-scripts
+      - run: npm ci --ignore-scripts
+      - run: npm run build --if-present
+      - uses: SokuRitszZ/npm-release-action@v1
+        id: bundle
+        with:
+          phase: build
+          version: ${{ needs.plan.outputs.version }}
+      - name: Install the exact artifact (add your CLI/API smoke assertion here)
+        env:
+          ARTIFACT: ${{ steps.bundle.outputs.npm-file }}
+        run: |
+          smoke=$(mktemp -d)
+          printf '{"private":true}\n' > "$smoke/package.json"
+          npm install --prefix "$smoke" --ignore-scripts --no-audit --no-fund "$ARTIFACT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ needs.plan.outputs.artifact-name }}
+          path: ${{ steps.bundle.outputs.artifact-directory }}
+          if-no-files-found: error
+          retention-days: 30
+
+  publish-npm:
+    if: vars.NPM_PUBLISH_ENABLED == 'true'
+    needs: [plan, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: npm-publish
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.commit }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm install --global npm@11.12.1 --ignore-scripts
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.plan.outputs.artifact-name }}
+          path: ${{ runner.temp }}/npm-release
+      - uses: SokuRitszZ/npm-release-action@v1
+        with:
+          phase: publish-npm
+          version: ${{ needs.plan.outputs.version }}
+          dry-run: 'false'
+
+  github-release:
+    if: vars.RELEASE_ASSETS_ENABLED == 'true'
+    needs: [plan, build, publish-npm]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.commit }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.plan.outputs.artifact-name }}
+          path: ${{ runner.temp }}/npm-release
+      - uses: SokuRitszZ/npm-release-action@v1
+        with:
+          phase: publish-github
+          version: ${{ needs.plan.outputs.version }}
+          dry-run: 'false'

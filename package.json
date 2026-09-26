@@ -1,0 +1,14 @@
+{
+  "name": "release-branch-npm-publisher-action",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Dependency-free GitHub Action for release-branch npm publishing",
+  "license": "MIT",
+  "repository": "github:SokuRitszZ/npm-release-action",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "test": "node --test",
+    "check": "node scripts/check.js"
+  }
+}

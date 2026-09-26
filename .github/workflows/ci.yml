@@ -1,0 +1,73 @@
+name: CI
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        node: ['22', '24']
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - run: npm ci --ignore-scripts
+      - run: npm run check
+      - run: npm test
+  action-smoke:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release/') && !github.event.deleted
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: ./
+        id: bundle
+        with:
+          phase: build
+          working-directory: .github/fixtures/package
+          shrinkwrap: 'true'
+          source-archive: 'true'
+      - name: Install and execute the exact fixture artifact
+        env:
+          ARTIFACT: ${{ steps.bundle.outputs.npm-file }}
+          VERSION: ${{ steps.bundle.outputs.version }}
+        run: |
+          smoke=$(mktemp -d)
+          printf '{"private":true}\n' > "$smoke/package.json"
+          npm install --prefix "$smoke" --offline --ignore-scripts --no-audit --no-fund "$ARTIFACT"
+          actual=$(node "$smoke/node_modules/release-action-smoke-fixture/cli.js")
+          test "$actual" = "$VERSION"
+      - uses: ./
+        with:
+          phase: publish-npm
+          working-directory: .github/fixtures/package
+          shrinkwrap: 'true'
+          source-archive: 'true'
+          version: ${{ steps.bundle.outputs.version }}
+          dry-run: 'true'
+      - uses: ./
+        with:
+          phase: publish-github
+          working-directory: .github/fixtures/package
+          shrinkwrap: 'true'
+          source-archive: 'true'
+          version: ${{ steps.bundle.outputs.version }}
+          dry-run: 'true'

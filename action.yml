@@ -1,0 +1,75 @@
+name: Release Branch npm Publisher
+description: 'Publish beta packages from release branches and stable packages from merged PRs, using verified artifacts and npm OIDC.'
+author: SokuRitszZ
+branding:
+  icon: package
+  color: blue
+inputs:
+  phase:
+    description: 'plan, build, verify, publish-npm, or publish-github'
+    default: plan
+  working-directory:
+    description: 'Standalone npm package directory, relative to the checkout root'
+    default: '.'
+  artifact-directory:
+    description: 'Bundle directory outside checkout; defaults to RUNNER_TEMP/npm-release'
+  release-branch-prefix:
+    description: 'Branch prefix followed by an exact x.y.z version'
+    default: 'release/'
+  main-branch:
+    description: 'Target branch required for stable PR-merge releases'
+    default: main
+  prerelease-id:
+    description: 'SemVer prerelease identifier; versions are x.y.z-ID.RUN.ATTEMPT'
+    default: beta
+  prerelease-tag:
+    description: 'npm dist-tag for prereleases'
+    default: beta
+  stable-tag:
+    description: 'npm dist-tag for stable releases'
+    default: latest
+  tag-prefix:
+    description: 'GitHub release tag prefix'
+    default: v
+  registry-url:
+    description: 'HTTPS npm registry URL without credentials'
+    default: 'https://registry.npmjs.org/'
+  access:
+    description: 'npm package access: public or restricted'
+    default: public
+  shrinkwrap:
+    description: 'Generate npm-shrinkwrap.json from package-lock.json for packaged applications'
+    default: 'false'
+  source-archive:
+    description: 'Include an archive of ALL tracked repository files with stamped package manifests'
+    default: 'false'
+  version:
+    description: 'Version output from plan; preserves artifact identity when retrying failed jobs'
+  dry-run:
+    description: 'Publication phases do not upload unless explicitly set to false'
+    default: 'true'
+  github-token:
+    description: 'Token with contents:write, used only by publish-github'
+    default: '${{ github.token }}'
+outputs:
+  version:
+    description: 'Derived npm version'
+  tag:
+    description: 'Derived GitHub release tag'
+  commit:
+    description: 'Exact push or PR merge commit'
+  prerelease:
+    description: 'Whether this is a prerelease'
+  dist-tag:
+    description: 'Selected npm distribution tag'
+  artifact-name:
+    description: 'Unique name for upload/download-artifact'
+  artifact-directory:
+    description: 'Absolute bundle directory'
+  npm-file:
+    description: 'Absolute path to verified npm tarball (empty for plan)'
+  status:
+    description: 'Executed phase, dry-run, published, or already-published'
+runs:
+  using: node24
+  main: src/main.js
