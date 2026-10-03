@@ -33,7 +33,7 @@ async function main() {
       const parts = cli.stdout?.trim().split('.').map(Number);
       assert(cli.status === 0 && (parts[0] > 11 || (parts[0] === 11 && (parts[1] > 5 || (parts[1] === 5 && parts[2] >= 1)))), 'Publication requires npm >=11.5.1');
     }
-    status = await publishNpm(bundle, config, { run: args => run('npm', args, config.workspace) });
+    status = await publishNpm(bundle, config, { run: (args, options) => run('npm', args, config.workspace, options) });
   } else if (config.phase === 'publish-github') {
     assert(config.dryRun || process.env.GITHUB_ACTIONS === 'true', 'Live publication requires GitHub Actions');
     status = await publishGitHub(bundle, config, { api: config.dryRun ? null : githubApi(config.token) });

@@ -93,6 +93,7 @@ The npm bundle preserves your package's normal npm contents and runtime scripts,
 
 - Both failed-job and full-run retries retain the same version for the **same run**. Prefer retrying failed jobs with the original artifact and `plan.version`; rebuilding a source archive can change its bytes and fail immutable-asset checks. Start a new run via a new push if a new beta version is needed.
 - Existing npm versions are skipped only if SHA-512 integrity matches. Only explicit registry `E404` means absent; auth/network failures stop publication.
+- After a successful npm upload, allow up to 5 minutes for asynchronous registry processing. Reads back off from 5s to 10s to 20s (capped), with each subprocess bounded by 30s and the remaining budget. This only retries reads, never uploads. Integrity mismatches fail immediately. If processing exceeds the budget, inspect the registry and retry failed jobs with the original artifact once visible; do not blindly rebuild or re-upload.
 - Existing GitHub assets must have the same SHA-256 digest. They are never clobbered. Partial uploads remain drafts.
 - Retrying an already-published npm version does not move its dist-tag backwards.
 - Parallel runs can finish out of order: `beta`/`latest` points to the last new upload, not necessarily the last push or highest version. Publish stable versions sequentially.

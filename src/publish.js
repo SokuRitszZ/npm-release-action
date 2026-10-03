@@ -4,12 +4,12 @@ import { assert } from './config.js';
 import { commandDiagnostics } from './diagnostics.js';
 
 const parse = value => { try { return JSON.parse(value); } catch { return null; } };
-export async function publishNpm(bundle, config, { run, wait = sleep, log = console.log }) {
-  const started = Date.now();
+export async function publishNpm(bundle, config, { run, wait = sleep, log = console.log, now = Date.now }) {
+  const started = now();
   let lookups = 0;
-  async function lookup() {
-    const result = await run(['view', `${bundle.manifest.name}@${bundle.plan.version}`, 'dist.integrity', '--json', '--prefer-online', '--registry', config.registry]);
-    commandDiagnostics(`registry lookup #${++lookups} elapsed=${Date.now() - started}ms`, result, log);
+  async function lookup(timeout = 30000) {
+    const result = await run(['view', `${bundle.manifest.name}@${bundle.plan.version}`, 'dist.integrity', '--json', '--prefer-online', '--registry', config.registry], { timeout });
+    commandDiagnostics(`registry lookup #${++lookups} elapsed=${now() - started}ms`, result, log);
     const data = parse(result.stdout);
     if (result.status === 0 && typeof data === 'string' && data.startsWith('sha512-')) return data;
     if (result.status !== 0 && (data?.error?.code === 'E404' || parse(result.stderr)?.error?.code === 'E404')) return null;
@@ -29,17 +29,24 @@ export async function publishNpm(bundle, config, { run, wait = sleep, log = cons
   const result = await run(['publish', bundle.npm, '--ignore-scripts', '--access', config.access, '--tag', bundle.plan.distTag, '--registry', config.registry]);
   commandDiagnostics('publish', result, log);
   assert(result.status === 0, 'npm publish failed; inspect registry state before retrying');
-  log('[npm-release] npm publish exited successfully; verifying registry visibility (5 reads, 2s intervals).');
-  for (let i = 0; i < 5; i++) {
-    const integrity = await lookup();
+  log('[npm-release] npm publish exited successfully; waiting up to 300s for registry processing (5s/10s/20s backoff; no re-upload).');
+  const deadline = now() + 300000;
+  let delay = 5000;
+  while (now() < deadline) {
+    const integrity = await lookup(Math.max(1, Math.min(30000, deadline - now())));
     if (integrity === bundle.npmIntegrity) {
       log('[npm-release] Published version is visible and integrity matches.');
       return 'published';
     }
     assert(!integrity, 'Published integrity mismatch');
-    if (i < 4) await wait(2000);
+    const remaining = deadline - now();
+    if (remaining <= 0) break;
+    const pause = Math.min(delay, remaining);
+    log(`[npm-release] Version still processing (E404); next check in ${pause}ms, budget remaining ${remaining}ms.`);
+    await wait(pause);
+    delay = Math.min(delay * 2, 20000);
   }
-  throw new Error('Publication not yet visible; inspect registry before retrying');
+  throw new Error('Publication not yet visible after 300s; upload succeeded but processing may still be pending. Inspect registry before retrying; do not rebuild or blindly re-upload.');
 }
 
 export function githubApi(token, fetcher = fetch) {

@@ -24,13 +24,15 @@ const config = { registry: 'https://registry.npmjs.org/', access: 'public', dryR
 
 test('successful upload followed by invisible version logs upload output and every lookup without republishing', async () => {
   const lines = [], calls = [], waits = [];
+  let clock = 0;
   await assert.rejects(publishNpm(bundle, config, { run: args => {
     calls.push(args[0]);
     return args[0] === 'publish' ? { status: 0, stdout: '+ example@1.0.0', stderr: 'npm notice publication pending' } : absent;
-  }, wait: async ms => waits.push(ms), log: line => lines.push(line) }), /Publication not yet visible/);
+  }, now: () => clock, wait: async ms => { waits.push(ms); clock += ms; }, log: line => lines.push(line) }), /Publication not yet visible after 300s/);
   assert.equal(calls.filter(x => x === 'publish').length, 1);
-  assert.equal(calls.filter(x => x === 'view').length, 6);
-  assert.deepEqual(waits, [2000, 2000, 2000, 2000]);
+  assert.equal(calls.filter(x => x === 'view').length, 18);
+  assert.deepEqual(waits.slice(0, 4), [5000, 10000, 20000, 20000]);
+  assert.equal(waits.reduce((a, b) => a + b, 0), 300000);
   assert.ok(lines.some(line => line.includes('publication pending')));
   assert.ok(lines.some(line => line.includes('registry lookup #6')));
 });
