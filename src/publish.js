@@ -1,11 +1,15 @@
 import fs from 'node:fs/promises';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { assert } from './config.js';
+import { commandDiagnostics } from './diagnostics.js';
 
 const parse = value => { try { return JSON.parse(value); } catch { return null; } };
-export async function publishNpm(bundle, config, { run, wait = sleep }) {
+export async function publishNpm(bundle, config, { run, wait = sleep, log = console.log }) {
+  const started = Date.now();
+  let lookups = 0;
   async function lookup() {
     const result = await run(['view', `${bundle.manifest.name}@${bundle.plan.version}`, 'dist.integrity', '--json', '--prefer-online', '--registry', config.registry]);
+    commandDiagnostics(`registry lookup #${++lookups} elapsed=${Date.now() - started}ms`, result, log);
     const data = parse(result.stdout);
     if (result.status === 0 && typeof data === 'string' && data.startsWith('sha512-')) return data;
     if (result.status !== 0 && (data?.error?.code === 'E404' || parse(result.stderr)?.error?.code === 'E404')) return null;
@@ -13,18 +17,25 @@ export async function publishNpm(bundle, config, { run, wait = sleep }) {
   }
   if (config.dryRun) {
     const result = await run(['publish', bundle.npm, '--dry-run', '--ignore-scripts', '--access', config.access, '--tag', bundle.plan.distTag, '--registry', config.registry]);
+    commandDiagnostics('publish dry-run', result, log);
     assert(result.status === 0, 'npm publish dry-run failed'); return 'dry-run';
   }
   const previous = await lookup();
   if (previous) {
     assert(previous === bundle.npmIntegrity, 'Published version has different bytes; refusing overwrite');
+    log('[npm-release] Version already exists with matching integrity; skipping upload.');
     return 'already-published'; // Do not move a dist-tag backwards during a retry.
   }
   const result = await run(['publish', bundle.npm, '--ignore-scripts', '--access', config.access, '--tag', bundle.plan.distTag, '--registry', config.registry]);
+  commandDiagnostics('publish', result, log);
   assert(result.status === 0, 'npm publish failed; inspect registry state before retrying');
+  log('[npm-release] npm publish exited successfully; verifying registry visibility (5 reads, 2s intervals).');
   for (let i = 0; i < 5; i++) {
     const integrity = await lookup();
-    if (integrity === bundle.npmIntegrity) return 'published';
+    if (integrity === bundle.npmIntegrity) {
+      log('[npm-release] Published version is visible and integrity matches.');
+      return 'published';
+    }
     assert(!integrity, 'Published integrity mismatch');
     if (i < 4) await wait(2000);
   }
